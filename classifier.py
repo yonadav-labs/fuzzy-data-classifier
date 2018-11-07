@@ -13,7 +13,7 @@ def build_record(lst):
                     for jj in lst if jj])
 
 
-def process_record(cursor, ii, key, grade):
+def process_record(cursor, ii, key, grade, match):
     # insert into adressen
     sql = '''INSERT INTO [dbo].[STG_GR_Adressen]([Straat],[Postcode],[Gemeente],[PersonenKey]) 
              values (?, ?, ?, ?)'''
@@ -30,6 +30,10 @@ def process_record(cursor, ii, key, grade):
     cursor.execute(sql)
     cursor.commit()
 
+    if match:
+        print ('----------------')
+        print (ii, '||', match, '||', grade, key)
+
 
 def compare(ii, golden_records_val):
     birthday = str(ii[11].date()) if ii[11] else ''
@@ -39,16 +43,16 @@ def compare(ii, golden_records_val):
     entity = build_record(item)
 
     if not entity_v or not entity:
-        return None, None
+        return None, -1
     if entity.count(' ') < 1 and LONG_CMP:
-        return None, None
+        return None, -1
 
-    ratio = process.extractOne(entity_v, golden_records_val, scorer=fuzz.partial_ratio)
-    grade = ratio[1]
-    if(grade < T1):
-        ratio = process.extractOne(entity, golden_records_val, scorer=fuzz.partial_ratio)
-        grade = ratio[1]
-    return ratio, grade
+    ratio = process.extractOne(entity_v, golden_records_val, scorer=fuzz.token_set_ratio)
+    # ratio = process.extractOne(entity_v, golden_records_val, scorer=fuzz.partial_ratio)
+    # if(grade < T1):
+    #     ratio = process.extractOne(entity, golden_records_val, scorer=fuzz.partial_ratio)
+    #     grade = ratio[1]
+    return ratio
 
 
 def main(cursor):
@@ -83,17 +87,12 @@ def main(cursor):
             break
 
         for ii in res:
-            ratio, grade = compare(ii, golden_records_val)
-            if not ratio:
-                continue
+            match, grade = compare(ii, golden_records_val)
 
             if grade > T1:
-                match = ratio[0]
                 key = golden_records_key[golden_records_val.index(match)]
-                print ('----------------')
-                print (ii, '||', match, '||', grade, key)
-            else:
-                grade = 100
+                process_record(cursor, ii, key, grade, match)
+            elif grade > 0:
                 # insert into STG_GR_Personen
                 sql = '''INSERT INTO [dbo].[STG_GR_Personen]([Naam],[Voorname],[RRNummer],[BTWnr],[Geslacht],[GebDatum],[GebPlaats],[PECLEUNIK])
                          values(?,?,?,?,?,?,?,?)'''
@@ -107,8 +106,7 @@ def main(cursor):
                 golden_records[key] = build_record(new[1:])
                 golden_records_key = list(golden_records.keys())
                 golden_records_val = list(golden_records.values())
-
-            process_record(cursor, ii, key, grade)
+                process_record(cursor, ii, key, 101, None)
 
     # get records with processed = false
     while True:
@@ -118,16 +116,11 @@ def main(cursor):
             break
 
         for ii in res:
-            ratio, grade = compare(ii, golden_records_val)
-            if not ratio:
-                continue
+            match, grade = compare(ii, golden_records_val)
 
             if grade > T2:
-                match = ratio[0]
                 key = golden_records_key[golden_records_val.index(match)]
-                process_record(cursor, ii, key, grade)
-                print ('----------------')
-                print (ii, '||', match, '||', grade, key)
+                process_record(cursor, ii, key, grade, match)
 
 
 if __name__ == '__main__':
