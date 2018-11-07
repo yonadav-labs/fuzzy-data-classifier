@@ -31,7 +31,7 @@ def process_record(cursor, ii, key, grade):
     cursor.commit()
 
 
-def compare(ii, golden_records_val, golden_records_key):
+def compare(ii, golden_records_val):
     birthday = str(ii[11].date()) if ii[11] else ''
     item_v = [ii[5], ii[6], ii[9], birthday]
     entity_v = build_record(item_v)   # with VAT
@@ -43,11 +43,11 @@ def compare(ii, golden_records_val, golden_records_key):
     if entity.count(' ') < 1 and LONG_CMP:
         return None, None
 
-    ratio = process.extract(entity_v, golden_records_val, scorer=fuzz.partial_ratio, limit=1)
-    grade = ratio[0][1]
+    ratio = process.extractOne(entity_v, golden_records_val, scorer=fuzz.partial_ratio)
+    grade = ratio[1]
     if(grade < T1):
-        ratio = process.extract(entity, golden_records_val, scorer=fuzz.partial_ratio, limit=1)
-        grade = ratio[0][1]
+        ratio = process.extractOne(entity, golden_records_val, scorer=fuzz.partial_ratio)
+        grade = ratio[1]
     return ratio, grade
 
 
@@ -83,12 +83,12 @@ def main(cursor):
             break
 
         for ii in res:
-            ratio, grade = compare(ii, golden_records_val, golden_records_key)
+            ratio, grade = compare(ii, golden_records_val)
             if not ratio:
                 continue
 
             if grade > T1:
-                match = ratio[0][0]
+                match = ratio[0]
                 key = golden_records_key[golden_records_val.index(match)]
                 print ('----------------')
                 print (ii, '||', match, '||', grade, key)
@@ -118,14 +118,14 @@ def main(cursor):
             break
 
         for ii in res:
-            ratio, grade = compare(ii, golden_records_val, golden_records_key)
+            ratio, grade = compare(ii, golden_records_val)
             if not ratio:
                 continue
 
             if grade > T2:
-                match = ratio[0][0]
+                match = ratio[0]
                 key = golden_records_key[golden_records_val.index(match)]
-                process_record(ii, key)
+                process_record(cursor, ii, key, grade)
                 print ('----------------')
                 print (ii, '||', match, '||', grade, key)
 
