@@ -7,6 +7,7 @@ import pdb
 T1 = 90
 T2 = 85
 LONG_CMP = False
+DEBUG = True
 
 def build_record(lst):
     return ' '.join([str(jj).lower().replace('.', '').replace(',', ' ') 
@@ -14,15 +15,15 @@ def build_record(lst):
 
 
 def process_record(cursor, ii, key, grade, match):
-    # insert into adressen
+    # insert into corresponding tables
     sql = '''INSERT INTO [dbo].[STG_GR_Adressen]([Straat],[Postcode],[Gemeente],[PersonenKey]) 
              values (?, ?, ?, ?)'''
     cursor.execute(sql, (ii[13], ii[14], ii[15], key))
-    # insert into contacten
+
     sql = '''INSERT INTO [dbo].[STG_GR_Contacten]([Telefoon],[Email],[Gemeente],[GSM],[Taalcode],[PersonenKey]) 
              values (?, ?, ?, ?, ?, ?)'''
     cursor.execute(sql, (ii[17], ii[28], ii[15], ii[29], ii[22], key))
-    # insert into key
+
     sql = '''INSERT INTO [dbo].[STG_GR_Link]([PECLEUNIK],[PersonenKey],[Percent]) values (?, ?, ?)'''
     cursor.execute(sql, (ii[0], key, grade))
     # set processed = true
@@ -30,7 +31,7 @@ def process_record(cursor, ii, key, grade, match):
     cursor.execute(sql)
     cursor.commit()
 
-    if match:
+    if match and DEBUG:
         print ('----------------')
         print (ii, '||', match, '||', grade, key)
 
@@ -47,12 +48,7 @@ def compare(ii, golden_records_val):
     if entity.count(' ') < 1 and LONG_CMP:
         return None, -1
 
-    ratio = process.extractOne(entity_v, golden_records_val, scorer=fuzz.token_set_ratio)
-    # ratio = process.extractOne(entity_v, golden_records_val, scorer=fuzz.partial_ratio)
-    # if(grade < T1):
-    #     ratio = process.extractOne(entity, golden_records_val, scorer=fuzz.partial_ratio)
-    #     grade = ratio[1]
-    return ratio
+    return process.extractOne(entity_v, golden_records_val, scorer=fuzz.token_set_ratio)
 
 
 def main(cursor):
