@@ -72,56 +72,62 @@ def main(cursor):
     if not golden_records:
         return
 
-    # select records processed = false and grade in ('A', 'B')
-    sql = "SELECT * FROM [Staging].[dbo].[STG_Personen] WHERE processed is NULL and grade in ('A', 'B');"
-    res = cursor.execute(sql).fetchall()
-
     golden_records_key = list(golden_records.keys())
     golden_records_val = list(golden_records.values())
 
-    for ii in res:
-        ratio, grade = compare(ii, golden_records_val, golden_records_key)
-        if not ratio:
-            continue
+    # select records processed = false and grade in ('A', 'B')
+    while True:
+        sql = "SELECT top 100 * FROM [Staging].[dbo].[STG_Personen] WHERE processed is NULL and grade in ('A', 'B');"
+        res = cursor.execute(sql).fetchall()
+        if not res:
+            break
 
-        if grade > T1:
-            match = ratio[0][0]
-            key = golden_records_key[golden_records_val.index(match)]
-            print ('----------------')
-            print (ii, '||', match, '||', grade, key)
-        else:
-            grade = 100
-            # insert into STG_GR_Personen
-            sql = '''INSERT INTO [dbo].[STG_GR_Personen]([Naam],[Voorname],[RRNummer],[BTWnr],[Geslacht],[GebDatum],[GebPlaats],[PECLEUNIK])
-                     values(?,?,?,?,?,?,?,?)'''
-            cursor.execute(sql, (ii[5], ii[6], ii[8], ii[9], ii[30], ii[11], ii[23], ii[0]))
-            cursor.commit()
-            # update golden_records
-            sql = "SELECT [PersonenKey], [Naam], [Voorname], [BTWNR], [GebDatum] FROM [dbo].[STG_GR_Personen] where PersonenKey not in {};".format(tuple(golden_records_key))
-            cursor.execute(sql)
-            new = cursor.fetchone()
-            key = int(new[0])
-            golden_records[key] = build_record(new[1:])
-            golden_records_key = list(golden_records.keys())
-            golden_records_val = list(golden_records.values())
+        for ii in res:
+            ratio, grade = compare(ii, golden_records_val, golden_records_key)
+            if not ratio:
+                continue
 
-        process_record(cursor, ii, key, grade)
+            if grade > T1:
+                match = ratio[0][0]
+                key = golden_records_key[golden_records_val.index(match)]
+                print ('----------------')
+                print (ii, '||', match, '||', grade, key)
+            else:
+                grade = 100
+                # insert into STG_GR_Personen
+                sql = '''INSERT INTO [dbo].[STG_GR_Personen]([Naam],[Voorname],[RRNummer],[BTWnr],[Geslacht],[GebDatum],[GebPlaats],[PECLEUNIK])
+                         values(?,?,?,?,?,?,?,?)'''
+                cursor.execute(sql, (ii[5], ii[6], ii[8], ii[9], ii[30], ii[11], ii[23], ii[0]))
+                cursor.commit()
+                # update golden_records
+                sql = "SELECT [PersonenKey], [Naam], [Voorname], [BTWNR], [GebDatum] FROM [dbo].[STG_GR_Personen] where PersonenKey not in {};".format(tuple(golden_records_key))
+                cursor.execute(sql)
+                new = cursor.fetchone()
+                key = int(new[0])
+                golden_records[key] = build_record(new[1:])
+                golden_records_key = list(golden_records.keys())
+                golden_records_val = list(golden_records.values())
+
+            process_record(cursor, ii, key, grade)
 
     # get records with processed = false
-    sql = "SELECT * FROM [Staging].[dbo].[STG_Personen] WHERE processed is NULL;"
-    res = cursor.execute(sql).fetchall()
+    while True:
+        sql = "SELECT top 100 * FROM [Staging].[dbo].[STG_Personen] WHERE processed is NULL;"
+        res = cursor.execute(sql).fetchall()
+        if not res:
+            break
 
-    for ii in res:
-        ratio, grade = compare(ii, golden_records_val, golden_records_key)
-        if not ratio:
-            continue
+        for ii in res:
+            ratio, grade = compare(ii, golden_records_val, golden_records_key)
+            if not ratio:
+                continue
 
-        if grade > T2:
-            match = ratio[0][0]
-            key = golden_records_key[golden_records_val.index(match)]
-            process_record(ii, key)
-            print ('----------------')
-            print (ii, '||', match, '||', grade, key)
+            if grade > T2:
+                match = ratio[0][0]
+                key = golden_records_key[golden_records_val.index(match)]
+                process_record(ii, key)
+                print ('----------------')
+                print (ii, '||', match, '||', grade, key)
 
 
 if __name__ == '__main__':
