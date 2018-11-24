@@ -9,6 +9,11 @@ T2 = 85
 LONG_CMP = False
 DEBUG = True
 
+golden_records_key = []
+golden_records_val = []
+golden_records_key_v = []
+golden_records_val_v = []
+
 def build_record(lst):
     return ' '.join([str(jj).lower().replace('.', '').replace(',', ' ') 
                     for jj in lst if jj])
@@ -36,7 +41,7 @@ def process_record(cursor, ii, key, grade, match):
         print (ii, '||', match, '||', grade, key)
 
 
-def compare(ii, golden_records_val):
+def compare(ii):
     birthday = str(ii[11].date()) if ii[11] else ''
     item_v = [ii[5], ii[6], ii[9], birthday]
     entity_v = build_record(item_v)   # with VAT
@@ -52,6 +57,10 @@ def compare(ii, golden_records_val):
 
 
 def main(cursor):
+    global golden_records_key
+    global golden_records_val
+    global golden_records_key_v
+    global golden_records_val_v
     # DUMP WEBHISTO
     cursor.execute('''INSERT INTO [dbo].[STG_GR_Personen]([Naam],[Voorname],[RRNummer],[GebDatum])
                       SELECT FullName, FirstName, Min(RRNUMMER), DateOfBirth 
@@ -83,12 +92,13 @@ def main(cursor):
             break
 
         for ii in res:
-            match, grade = compare(ii, golden_records_val)
+            match, grade = compare(ii)
 
             if grade > T1:
                 key = golden_records_key[golden_records_val.index(match)]
                 process_record(cursor, ii, key, grade, match)
             elif grade > 0:
+                print ("Adding a new golden record ...")
                 # insert into STG_GR_Personen
                 sql = '''INSERT INTO [dbo].[STG_GR_Personen]([Naam],[Voorname],[RRNummer],[BTWnr],[Geslacht],[GebDatum],[GebPlaats],[PECLEUNIK])
                          values(?,?,?,?,?,?,?,?)'''
@@ -112,7 +122,7 @@ def main(cursor):
             break
 
         for ii in res:
-            match, grade = compare(ii, golden_records_val)
+            match, grade = compare(ii)
 
             if grade > T2:
                 key = golden_records_key[golden_records_val.index(match)]
