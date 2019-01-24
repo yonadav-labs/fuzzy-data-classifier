@@ -2,9 +2,13 @@ import pyodbc
 from fuzzywuzzy import fuzz
 from fuzzywuzzy import process
 
+import uuid
 import pdb
 
 DEBUG = True
+
+T1 = 90
+T2 = 85
 
 golden_records_key = []
 golden_records_val = []
@@ -50,56 +54,63 @@ def main(cursor):
     global golden_records_val
 
     # DUMP WEBHISTO
-    cursor.execute('''INSERT INTO [Omerus].[dbo].[STG_GR_Personen]([Naam],[Voorname],[RRNummer],[GebDatum], [PECLEUNIK])
+    cursor.execute('''INSERT INTO [Omerus].[dbo].[STG_GR_Personen]([Naam],[Voornaam],[RRNummer],[GebDatum], [PECLEUNIK])
                       SELECT Min(FullName), Min(FirstName), RRNUMMER, Min(DateOfBirth) , Min(PECLEUNIK)
                       FROM [Staging].[dbo].[STG_RRWebHisto_Personen] 
-                      WHERE processed is null
+                      WHERE processed is null and RRNUMMER is not null and RRNUMMER != ''
                       GROUP BY RRNUMMER;''')
 
     cursor.execute('''INSERT INTO [Omerus].[dbo].[STG_GR_Adressen]([Straat], [Postcode], [Van], [PersonenKey])
-                      (   SELECT  [Street], [PostalCode], [DateAddress], [Omerus].[dbo].[STG_GR_Personen].PersonenKey
-                          FROM [Staging].[dbo].[STG_RRWebHisto_Personen]
-                          INNER JOIN [Omerus].[dbo].[STG_GR_Personen] ON
-                          [Staging].[dbo].[STG_RRWebHisto_Personen].RRNUMMER = [Omerus].[dbo].[STG_GR_Personen].RRNummer and [Staging].[dbo].[STG_RRWebHisto_Personen].processed is null
-                      );''')
+                      SELECT  [Street], [PostalCode], [DateAddress], [Omerus].[dbo].[STG_GR_Personen].PersonenKey
+                      FROM [Staging].[dbo].[STG_RRWebHisto_Personen]
+                      INNER JOIN [Omerus].[dbo].[STG_GR_Personen] ON
+                      [Staging].[dbo].[STG_RRWebHisto_Personen].RRNUMMER = [Omerus].[dbo].[STG_GR_Personen].RRNummer and 
+                      [Staging].[dbo].[STG_RRWebHisto_Personen].processed is null and 
+                      [Staging].[dbo].[STG_RRWebHisto_Personen].RRNUMMER is not null and 
+                      [Staging].[dbo].[STG_RRWebHisto_Personen].RRNUMMER != '';''')
 
     # update set processed = true
-    cursor.execute("update [Staging].[dbo].[STG_RRWebHisto_Personen] set processed=1 where RRNUMMER in (select RRNummer from [Omerus].[dbo].[STG_GR_Personen]);")
+    cursor.execute("update [Staging].[dbo].[STG_RRWebHisto_Personen] set processed=1 where RRNUMMER in (select RRNummer from [Omerus].[dbo].[STG_GR_Personen]) and RRNUMMER is not null and RRNUMMER != '';")
     cursor.commit()
 
-    cursor.execute('''INSERT INTO [Omerus].[dbo].[STG_GR_Personen]([Naam],[Voorname],[RRNummer],[GebDatum], [PECLEUNIK])
-                      (   SELECT Min(Naam), Min(voornaam), RRNUMMER, Min(GEBDATUM) , Min(PECLEUNIK)
-                          FROM [Staging].[dbo].[STG_Personen] 
-                          WHERE processed is null and Grade in ('A', 'B')
-                          GROUP BY RRNUMMER
-                      )''')
+    cursor.execute('''INSERT INTO [Omerus].[dbo].[STG_GR_Personen]([Naam],[Voornaam],[RRNummer],[GebDatum], [PECLEUNIK])
+                      SELECT Min(Naam), Min(voornaam), RRNUMMER, Min(GEBDATUM) , Min(PECLEUNIK)
+                      FROM [Staging].[dbo].[STG_Personen] 
+                      WHERE processed is null and Grade in ('A', 'B') and RRNUMMER is not null and RRNUMMER != ''
+                      GROUP BY RRNUMMER;''')
 
     cursor.execute('''INSERT INTO [Omerus].[dbo].[STG_GR_Adressen]([Straat], [Postcode], [Gemeente], [PersonenKey])
-                      (   SELECT  [STRAAT], [POSTKODE], [GemeenteOrig], [Omerus].[dbo].[STG_GR_Personen].PersonenKey
-                          FROM [Staging].[dbo].[STG_Personen]
-                          INNER JOIN [Omerus].[dbo].[STG_GR_Personen] ON
-                          [Staging].[dbo].[STG_Personen].RRNUMMER = [Omerus].[dbo].[STG_GR_Personen].RRNummer and [Staging].[dbo].[STG_Personen].processed is null
-                      )''')
+                      SELECT  [STRAAT], [POSTKODE], [GemeenteOrig], [Omerus].[dbo].[STG_GR_Personen].PersonenKey
+                      FROM [Staging].[dbo].[STG_Personen]
+                      INNER JOIN [Omerus].[dbo].[STG_GR_Personen] ON
+                      [Staging].[dbo].[STG_Personen].RRNUMMER = [Omerus].[dbo].[STG_GR_Personen].RRNummer and 
+                      [Staging].[dbo].[STG_Personen].processed is null and
+                      [Staging].[dbo].[STG_Personen].RRNUMMER is not null and 
+                      [Staging].[dbo].[STG_Personen].RRNUMMER != '';''')
 
     cursor.execute('''INSERT INTO [Omerus].[dbo].[STG_GR_Contacten]([Telefoon], [Email], [Gemeente], [GSM], [Taalcode], [Van], [Tot], [PersonenKey]) 
-                      (   SELECT  [TELEFOON], [EMAIL], [GemeenteOrig], [GSM], [TAALKODE], NULL, NULL, [Omerus].[dbo].[STG_GR_Personen].PersonenKey
-                          FROM [Staging].[dbo].[STG_Personen]
-                          INNER JOIN [Omerus].[dbo].[STG_GR_Personen] ON
-                          [Staging].[dbo].[STG_Personen].RRNUMMER = [Omerus].[dbo].[STG_GR_Personen].RRNummer and [Staging].[dbo].[STG_Personen].processed is null
-                      )''')
+                      SELECT  [TELEFOON], [EMAIL], [GemeenteOrig], [GSM], [TAALKODE], NULL, NULL, [Omerus].[dbo].[STG_GR_Personen].PersonenKey
+                      FROM [Staging].[dbo].[STG_Personen]
+                      INNER JOIN [Omerus].[dbo].[STG_GR_Personen] ON
+                      [Staging].[dbo].[STG_Personen].RRNUMMER = [Omerus].[dbo].[STG_GR_Personen].RRNummer and 
+                      [Staging].[dbo].[STG_Personen].processed is null and
+                      [Staging].[dbo].[STG_Personen].RRNUMMER is not null and 
+                      [Staging].[dbo].[STG_Personen].RRNUMMER != '';''')
 
     cursor.execute('''INSERT INTO [Omerus].[dbo].[STG_GR_Link](PECLEUNIK, PersonenKey, [Percent]) 
-                      (   SELECT [Omerus].[dbo].[STG_GR_Personen].PECLEUNIK, [Omerus].[dbo].[STG_GR_Personen].PersonenKey, 100
-                          FROM [Staging].[dbo].[STG_Personen]
-                          INNER JOIN [Omerus].[dbo].[STG_GR_Personen] ON
-                          [Staging].[dbo].[STG_Personen].RRNUMMER = [Omerus].[dbo].[STG_GR_Personen].RRNummer and [Staging].[dbo].[STG_Personen].processed is null
-                      )''')
+                      SELECT [Staging].[dbo].[STG_Personen].PECLEUNIK, [Omerus].[dbo].[STG_GR_Personen].PersonenKey, 100
+                      FROM [Staging].[dbo].[STG_Personen]
+                      INNER JOIN [Omerus].[dbo].[STG_GR_Personen] ON
+                      [Staging].[dbo].[STG_Personen].RRNUMMER = [Omerus].[dbo].[STG_GR_Personen].RRNummer and 
+                      [Staging].[dbo].[STG_Personen].processed is null and
+                      [Staging].[dbo].[STG_Personen].RRNUMMER is not null and 
+                      [Staging].[dbo].[STG_Personen].RRNUMMER != '';''')
 
-    cursor.execute("update [Staging].[dbo].[STG_Personen] set processed=1 where RRNUMMER in (select RRNummer from [Omerus].[dbo].[STG_GR_Personen]);")
+    cursor.execute("update [Staging].[dbo].[STG_Personen] set processed=1 where RRNUMMER in (select RRNummer from [Omerus].[dbo].[STG_GR_Personen]) and RRNUMMER is not null and RRNUMMER != '';")
     cursor.commit()
 
     # golden_records
-    sql = "SELECT [PersonenKey], [Naam], [Voorname], [BTWNR], [RRNummer], [GebDatum] FROM [dbo].[STG_GR_Personen];"
+    sql = "SELECT [PersonenKey], [Naam], [Voornaam], [BTWNR], [RRNummer], [GebDatum] FROM [dbo].[STG_GR_Personen];"
     res = cursor.execute(sql).fetchall()
 
     golden_records = { int(ii[0]): build_record(ii[1:]) for ii in res }
@@ -109,6 +120,38 @@ def main(cursor):
 
     golden_records_key = list(golden_records.keys())
     golden_records_val = list(golden_records.values())
+
+    # pdb.set_trace()
+    # get records with processed = false
+    while True:
+        sql = "SELECT top 100 * FROM [Staging].[dbo].[STG_Personen] WHERE processed is NULL and grade in ('A', 'B');"
+        res = cursor.execute(sql).fetchall()
+        if not res:
+            break
+
+        for ii in res:
+            match, grade = compare(ii)
+
+            if grade > T1:
+                key = golden_records_key[golden_records_val.index(match)]
+                process_record(cursor, ii, key, grade, match)
+            elif grade > 0:
+                # insert into STG_GR_Personen
+                sql = '''INSERT INTO [dbo].[STG_GR_Personen]([Naam],[Voornaam], [RRNummer], [BTWnr],[Geslacht],[GebDatum],[GebPlaats],[PECLEUNIK])
+                         values(?,?,?,?,?,?,?,?)'''
+                cursor.execute(sql, (ii[5], ii[6], str(uuid.uuid4()), ii[9], ii[30], ii[11], ii[23], ii[0]))
+                cursor.commit()
+                # update golden_records
+                sql = "SELECT top 1 [PersonenKey], [Naam], [Voornaam], [BTWNR], [GebDatum] FROM [dbo].[STG_GR_Personen] order by PersonenKey desc;"
+                cursor.execute(sql)
+                new = cursor.fetchone()
+                key = int(new[0])
+                print ("Adding a new golden record ({}) ...".format(key))
+                golden_records[key] = build_record(new[1:])
+                golden_records_key = list(golden_records.keys())
+                golden_records_val = list(golden_records.values())
+                process_record(cursor, ii, key, 100, None)
+
 
     # get records with processed = false
     while True:
@@ -120,8 +163,9 @@ def main(cursor):
         for ii in res:
             match, grade = compare(ii)
 
-            key = golden_records_key[golden_records_val.index(match)]
-            process_record(cursor, ii, key, grade, match)
+            if match:
+                key = golden_records_key[golden_records_val.index(match)]
+                process_record(cursor, ii, key, grade, match)
 
 
 if __name__ == '__main__':
